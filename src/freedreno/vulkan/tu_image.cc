@@ -680,28 +680,37 @@ tu_image_init(struct tu_device *device, struct tu_image *image,
       }
    }
 
-   /* A810 sampled-depth diagnostic (opt-in): compare uncompressed internal
-    * depth/stencil textures with the default UBWC layout. Preserve explicit
-    * external modifiers, color UBWC and all non-A810 devices.
-    */
-   static const bool a810_sampled_depth_diag = []() {
-      const char *env = os_get_option("TU_A810_SAMPLED_DEPTH_DIAG");
-      return env && strcmp(env, "1") == 0;
-   }();
-   const uint64_t sampled_depth_chip = device->physical_device->dev_id.chip_id;
-   const bool sampled_depth_a810 =
-      sampled_depth_chip == 0x44010000ull ||
-      sampled_depth_chip == 0xffff44010000ull;
-   if (sampled_depth_a810 && a810_sampled_depth_diag &&
-       modifier == DRM_FORMAT_MOD_INVALID &&
-       vk_format_is_depth_or_stencil(image->vk.format) &&
-       (pCreateInfo->usage &
-        (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)))
-      ubwc_enabled = false;
+/* A810 sampled-depth diagnostic (opt-in): compare uncompressed internal
+ * depth/stencil textures with the default UBWC layout. Preserve explicit
+ * external modifiers, color UBWC and all non-A810 devices.
+ */
+static const bool a810_sampled_depth_diag = []() {
+   const char *env = os_get_option("TU_A810_SAMPLED_DEPTH_DIAG");
+   return env && strcmp(env, "1") == 0;
+}();
 
-   if (TU_DEBUG(NOUBWC)) {
-      ubwc_enabled = false;
-   }
+const uint64_t sampled_depth_chip =
+   device->physical_device->dev_id.chip_id;
+
+const bool sampled_depth_a810 =
+   sampled_depth_chip == 0x44010000ull ||
+   sampled_depth_chip == 0xffff44010000ull;
+
+const bool sampled_depth =
+   vk_format_is_depth_or_stencil(image->vk.format) &&
+   (pCreateInfo->usage &
+    (VK_IMAGE_USAGE_SAMPLED_BIT |
+     VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT));
+
+if (sampled_depth_a810 &&
+    a810_sampled_depth_diag &&
+    modifier == DRM_FORMAT_MOD_INVALID &&
+    sampled_depth)
+   ubwc_enabled = false;
+
+if (TU_DEBUG(NOUBWC)) {
+   ubwc_enabled = false;
+}
 
    /* Layout computation begins here */
    enum a6xx_tile_mode tile_mode = TILE6_3;
